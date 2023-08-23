@@ -1,0 +1,1 @@
+Sadly, these scripts were based on data pulled from eddb.io which is no longer supported :(
