@@ -6,9 +6,13 @@ library(ggrepel)
 library(plotly)
 
 # load -------------------------------------------------------------------------
-data_all <-
-  read_csv("./data/temp/ship_all.csv",
-           show_col_types = F)
+data_ed <-
+  list()
+
+for(sheet in excel_sheets("./data/meta/ships.xlsx")){
+  data_ed[[sheet]] <-
+    read_excel("./data/meta/ships.xlsx", sheet = sheet)
+}
 
 # hardpoints -------------------------------------------------------------------
 data_wrangled <-
@@ -30,10 +34,9 @@ data_wrangled$hardpoints <-
   summarise(firepower = sum(firepower)) %>% 
   left_join(data_ed$fighters, by = "Model") %>% 
   mutate(fighters = replace_na(fighters,0)) %>% 
-  mutate(firepower = firepower + fighters) %>% 
+  mutate(firepower = firepower + (fighters*1)) %>% 
   select(-fighters)
   
-
 # utility
 data_wrangled$utility <-
   data_ed$hardpoints %>% 
@@ -65,6 +68,10 @@ data_all <-
   reduce(data_wrangled, left_join, by = "Model")
 
 data_all$fighters[is.na(data_all$fighters)] <- 0
+
+# uncaps colnames
+colnames(data_all) <-
+  make.names(tolower(colnames(data_all)))
 
 # export -----------------------------------------------------------------------
 write_csv(data_all,

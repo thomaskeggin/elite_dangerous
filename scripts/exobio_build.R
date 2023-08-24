@@ -85,9 +85,6 @@ ggsave("./plots/exo_ships.png",
        height = 8*0.8,
        width = 12*0.8)
 
-
-
-
 # footprint
 plots$foot <-
   ggplot(exo,
