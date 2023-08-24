@@ -1,5 +1,5 @@
 # Elite Dangerous
-For playing about with data from Elite Dangerous.
+For playing about with data from [Elite Dangerous](https://www.elitedangerous.com/).
 
 Tree calculated from the scaled base stats of each ship.
 Ship-ship distances are the Euclidean distances based on ship stats, which were then used to hierarchically cluster the ships. I then used kmeans to find 12 functional groups (number of groups based on me playing the game too much and eye-balling the general role of each ship).
