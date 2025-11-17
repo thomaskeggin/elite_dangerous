@@ -3,6 +3,7 @@
 /data
 /fonts
 /icons
+/outputs
 
 # History files
 .Rhistory
