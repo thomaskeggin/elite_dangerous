@@ -1,30 +1,47 @@
-# The idea is to generate a short list of systems to mine in their respective
+# The idea is to generate a list of viable systems to mine in, and their respective
 # sell systems.
 # i.e., reinforced with rings -> boom acquisitions
-# the EDSM powerplay data do not tell you who is in control of a reinforcement
+
+# Data inputs:
+# EDSM nightly dumps
+#             populated system data
+#             powerplay data
+# INARA for Nakato reinforcement systems
+
+# The sell price is dependent on the minor faction state, not the overall
+# system state (state of the ruling minor faction only). So for each target
+# system we need to check the states of all minor factions present.
+
+# All information is taken from the EDSM nightly dumps, except for the powerplay.
+# The EDSM powerplay data do not tell you who is in control of a reinforcement
 # system, just which powers are present, which makes it a bit useless.
-# Would be better to source this info from INARA using an API query.
+# Instead, I've gone the dirty route and scraped Nakato's INARA page.
 
 # set --------------------------------------------------------------------------
+# load libraries
 library(tidyverse)
+library(rvest)
+library(httr2)
 library(progress)
 
-# manually add reinforced
+# manually add reinforced systems if the powerplay data are playing up
 manual_reinforced <-
   list(stronghold = c(),
-       fortified = c())
+       fortified  = c())
 
+# container for target systems
 targets <-
   list()
 
 # load powerplay ---------------------------------------------------------------
+# load in pre-compiled powerplay data from EDSM
 dir_processed <-
   "./data/processed/" #input
 
-# find the latest powerplay download
+# find the latest local powerplay download
 latest_powerplay <-
   tibble(file_full = list.files(dir_processed, full.names = T),
-         file = list.files(dir_processed)) |> 
+         file      = list.files(dir_processed)) |> 
   filter(grepl("power",file)) |> 
   mutate(date = gsub("sys_power_raw_|.rds","",file) |> 
            as.Date()) |> 
@@ -60,33 +77,6 @@ populated_coords <-
   select(name, x, y , z)
 
 # subset Nakato reinforced systems ---------------------------------------------
-# # find all reinforced Nakato systems using messy EDSM powerplay
-# reinforced_all <-
-#   powerplay |> 
-#   filter(power == "Nakato Kaine" &
-#            powerState %in% c("Stronghold",
-#                              "Fortified"))
-# 
-# # remove manual if already there
-# manual_reinforced$stronghold <-
-#   manual_reinforced$stronghold[which(!manual_reinforced$stronghold %in% reinforced_all$name)]
-# 
-# reinforced_all <-
-#   # add manual systems
-#   rbind.data.frame(
-#     reinforced_all,
-#     tibble(populated_coords |> 
-#              filter(name %in% manual_reinforced$stronghold),
-#            
-#            power = "Nakato Kaine",
-#            powerState = "Stronghold",
-#            id = NA,
-#            id64 = NA,
-#            allegiance = NA,
-#            government = NA,
-#            state = NA,
-#            date = Sys.time() |> as.character()))
-
 # find reinforcement systems by webscraping INARA...
 url <-
   "https://inara.cz/elite/power-controlled/13/"
@@ -130,13 +120,13 @@ reinforced_all <-
   
   left_join(populated)
 
-# keep only those with minable rings
+# keep only those with mineable rings
 re_popped <-
   populated |> 
   filter(name %in% reinforced_all$name)
 
-re_keepers <- c()
-re_rings_list   <- list()
+re_keepers    <- c()
+re_rings_list <- list()
 
 for(re in reinforced_all$name){
   
@@ -167,59 +157,68 @@ for(re in reinforced_all$name){
   }
 }
 
+# compile all rings and their types
 re_rings <-
-  do.call(rbind.data.frame,
-          re_rings_list) |> 
+  bind_rows(re_rings_list) |> 
   as_tibble() |> 
   select(name,ring_name,type) |> 
   rename(system_source = name)
 
+# filter out reinforcement systems with no rings that can be mined
 reinforced <-
   reinforced_all |> 
   filter(name %in% re_keepers) |> 
   mutate(date = as.POSIXct(date))
 
-# record boom systems that could self-sell
+# record boom systems that can mine and sell in the same system
 booming <-
   boom_update <-
   c()
 
 for(sys in reinforced$name){
   
+  # it's not about system state, but each minor faction, so we extract all the
+  # minor factions present in a system
   factions <-
     populated |> 
     filter(name == sys) |> 
     pull(factions)
   
+  # a bit sloppy, but active states can have multiple values, text searching the
+  # unlisted column seems best
   booming <-
     c(booming,
       grepl("Boom",unlist(factions[[1]]$activeState)) |> sum())
   
+  # keep the update time
   boom_update <-
     c(boom_update,
       unique(factions[[1]]$lastUpdate))
   
 }
 
+# compile all the self-selling reinforcement system information
 targets$reinforcement <-
   reinforced |> 
   select(powerState,
          name,
          date) |> 
   mutate(boom_present = booming,
-         boom_update = as.POSIXct(boom_update)) |> 
+         boom_update  = as.POSIXct(boom_update)) |> 
   filter(boom_present == T) |> 
   
-  rename(system_source = name,
+  rename(system_source        = name,
          system_source_update = date) |> 
-  mutate(system_sell = system_source,
-         system_sell_update = boom_update,
+  mutate(system_sell          = system_source,
+         system_sell_update   = boom_update,
          ly = 0) |> 
   
   rename(system_sell_powerState = powerState) |> 
   select(-contains("boom"))
 
 # find stronghold targets ------------------------------------------------------
+# these are acquisition systems within the 30 ly radii of the stronghold systems
+# with minable rings.
 stronghold <-
   reinforced |> 
   filter(powerState == "Stronghold") |> 
@@ -253,7 +252,7 @@ for(strong in strongholds){
     stronghold |> 
     filter(name == strong)
   
-  # subset acquisition systems by bbox
+  # subset acquisition systems by bounding box to reduce computational load
   bbox_subset <-
     populated_coords |> 
     filter(x <= pull(bbox,xmax),
@@ -264,7 +263,7 @@ for(strong in strongholds){
            z >= pull(bbox,zmin)) |> 
     filter(name != strong)
   
-  # find actual distances
+  # find euclidean distances between stronghold system and other systems
   coordinates <-
     rbind.data.frame(bbox |> select(name,x,y,z),
                      bbox_subset)
@@ -276,8 +275,8 @@ for(strong in strongholds){
   
   distances <-
     tibble(name = bbox_subset$name,
-           ly = fields::rdist(coords_mat)[-1,1]) |> 
-    filter(ly <= 30)
+           ly = fields::rdist(coords_mat)[-1,1]) |> # euclidean
+    filter(ly <= 30) # filter to those actually within range
   
   # see if there are any boom factions in each system
   booming <-
@@ -312,7 +311,7 @@ for(strong in strongholds){
     distances_booming |> 
     left_join(powerplay, by = "name") |> 
     select(name,ly,powerState,boom_update) |> 
-    filter(powerState == "Unoccupied") |> 
+    filter(powerState == "Unoccupied") |>
     distinct()
   
   # store systems
@@ -384,8 +383,8 @@ for(fort in fortifieds){
   
   distances <-
     tibble(name = bbox_subset$name,
-           ly = fields::rdist(coords_mat)[-1,1]) |> 
-    filter(ly <= 30)
+           ly = fields::rdist(coords_mat)[-1,1]) |> # euclidean distances
+    filter(ly <= 20) # within range
   
   # see if there are any boom factions in each system
   booming <-
@@ -456,9 +455,9 @@ targets_rounded <-
 # export -----------------------------------------------------------------------
 # potential sell targets
 write_csv(targets_rounded,
-          "./outputs/mining/merit_mining/boom_acquisitions.csv") #output
+          "./outputs/mining/merit_mining/01_source_to_sell_systems.csv") #output
 
 # potential source rings
 write_csv(re_rings,
-          "./outputs/mining/merit_mining/reinforced_rings.csv") #output
+          "./outputs/mining/merit_mining/01_reinforced_rings.csv") #output
 

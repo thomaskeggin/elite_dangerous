@@ -11,6 +11,9 @@ sell_stations <-
            show_col_types = F)
 
 # build requests ---------------------------------------------------------------
+# unlike system/faction information which is not too dynamic, we want up to date
+# market data, so this time we use the EDSM API instead of the nightly dumps.
+# Be kind to their servers!
 sell_station_markets_list <-
   list()
 
