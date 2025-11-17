@@ -8,9 +8,10 @@ library(scales)
 library(plotly)
 library(ggtree)
 library(tidytree)
-library(ggtreeExtra)
+#library(ggtreeExtra)
 library(ggstar)
 library(ggforce)
+library(wesanderson)
 
 attributes <-
   c("speed",

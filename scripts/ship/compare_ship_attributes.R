@@ -1,3 +1,5 @@
+# This script produces a comparative ship 
+
 # set --------------------------------------------------------------------------
 library(tidyverse)
 library(scales)
@@ -6,7 +8,9 @@ library(ggpubr)
 # fonts
 library(showtext)
 font_add(family = "Stonehenge", regular = "C:/Users/thoma/OneDrive/Documents/ed/fonts/stonehenge/stonehen.ttf")
-font_add(family = "Starjedi", regular = "C:/Users/thoma/OneDrive/Documents/ed/fonts/star_jedi/starjedi/Starjhol.ttf")
+font_add(family = "dune", regular = "C:/Users/thoma/OneDrive/Documents/fonts/dune_rise/Dune_Rise.ttf")
+font_add(family = "nasa", regular = "C:/Users/thoma/OneDrive/Documents/fonts/nasalization/nasalization-rg.otf")
+font_add(family = "starwars", regular = "C:/Users/thoma/OneDrive/Documents/fonts/star_jedi/starjedi/Starjedi.ttf")
 
 showtext_auto()
 
@@ -14,7 +18,6 @@ showtext_auto()
 data_all <-
   read_csv("./data/temp/ship_all.csv",
            show_col_types = F)
-
 
 # wrangle ----------------------------------------------------------------------
 data_plot <- 
@@ -24,18 +27,18 @@ data_plot <-
 # pick target attributes
 attributes <-
   c("firepower",
-    "SPEED",
-    "BOOST",
-    "AGILITY",
-    "SHIELD",
-    "ARMOUR",
+    "speed",
+    "boost",
+    "agility",
+    "shield",
+    "armour",
     "optional",
     "military",
     "footprint",
     "jump")
 
 # scale target attributes
-scale_me <- c(attributes,"jump_max")
+scale_me <- c(attributes,"jump.max")
 data_plot[scale_me] <-
   lapply(data_plot[scale_me], rescale)
 
@@ -43,22 +46,19 @@ data_plot[scale_me] <-
 data_plot <-
   data_plot %>% 
   select(-jump) %>%
-  rename(jump = jump_max) %>% 
+  rename(jump = jump.max) %>% 
   pivot_longer(cols = all_of(attributes),
                names_to = "attribute") %>% 
   mutate(attribute = factor(attribute,
                             levels = attributes))
 
 # lower case all model names
-data_plot$attribute <- 
-  tolower(data_plot$attribute)
-data_plot$Model <- 
-  tolower(data_plot$Model)
+data_plot$model <- 
+  tolower(data_plot$model)
 
 # plot -------------------------------------------------------------------------
 # settings
 text_colour <- "black"
-
 
 # make plot
 plot_me <-
@@ -66,11 +66,12 @@ plot_me <-
   # base plot
   ggplot(data_plot,
          aes(x = value,
-             y = reorder(Model,punch),
+             y = reorder(model,punch),
              fill = punch)) +
   
   geom_col(position = "dodge",
-           colour = "transparent") +
+           colour = "black",
+           linewidth = 0.2) +
   
   # colour scheme
   scale_fill_gradient(high = "#FFA136",
@@ -78,29 +79,29 @@ plot_me <-
   
   # split panels
   facet_grid(rows = c("multicrew","attribute"),
-             #nrow = 2,
              space = "free_y",
              scales = "free_y") +
   
   # theme choices
-  theme_minimal() +
+  theme_minimal(base_size = 8) +
   theme(
     
-    axis.text.y = element_text(color = text_colour),
+    axis.text.y  = element_text(color = text_colour, hjust = 0.9),
     axis.title.x = element_text(color = text_colour),
     axis.title.y = element_text(color = text_colour),
-    legend.text = element_text(color = text_colour),
+    legend.text  = element_text(color = text_colour),
     legend.title = element_text(color = text_colour),
-    strip.text = element_text(color = text_colour),
+    strip.text   = element_text(color = text_colour),
     
+    text = element_text(family = "nasa"),
     
-    text = element_text(family = "Starjedi"),
+    axis.ticks.x = element_blank(),
+    axis.text.x  = element_blank(),
     
-    axis.ticks.x=element_blank(),
-    axis.text.x=element_blank(),
+    #plot.background  = element_rect(fill='transparent', color=NA),
     
-    panel.background = element_rect(fill='transparent'),
-    plot.background = element_rect(fill='transparent', color=NA),
+    panel.background = element_blank(),
+    panel.border     = element_blank(),
     panel.grid.major = element_blank(),
     panel.grid.minor = element_blank()) +
   
@@ -108,5 +109,7 @@ plot_me <-
   ylab("") 
 
 # export -----------------------------------------------------------------------
-ggsave("./plots/test.pdf",
+ggsave("./plots/compare_ship_attributes.svg",
+       height = 10,
+       width = 20,
        plot_me)
